@@ -1,12 +1,14 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import Navbar from './components/layout/Navbar';
-import Footer from './components/layout/Footer';
-import Home from './pages/Home';
-import EyeDisease from './pages/EyeDisease';
-import MentalHealth from './pages/MentalHealth';
-import PublicHealth from './pages/PublicHealth';
-import DyselexiaAgent from "./pages/DyslexiaAgent"
-import Auth from './pages/Auth';
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import Navbar from "./components/layout/Navbar";
+import Footer from "./components/layout/Footer";
+import Home from "./pages/Home";
+import EyeDisease from "./pages/EyeDisease";
+import MentalHealth from "./pages/MentalHealth";
+import PublicHealth from "./pages/PublicHealth";
+import DyselexiaAgent from "./pages/DyslexiaAgent";
+import VoiceAssessment from "./pages/VoiceAssessment";
+import Auth from "./pages/Auth";
+import BussinessModel from "./pages/BussinessModel";
 
 function App() {
   return (
@@ -21,6 +23,8 @@ function App() {
             <Route path="/mental-health" element={<MentalHealth />} />
             <Route path="/care-intel-ai" element={<PublicHealth />} />
             <Route path="/dyslexia" element={<DyselexiaAgent />} />
+            <Route path="/speech" element={<VoiceAssessment />} />
+            <Route path="/model" element={<BussinessModel />} />
           </Routes>
         </main>
         <Footer />

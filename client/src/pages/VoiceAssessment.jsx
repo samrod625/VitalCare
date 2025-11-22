@@ -1,8 +1,89 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Mic, Square, Volume2, RefreshCw, TrendingUp, Sparkles, Loader, Play, Pause } from 'lucide-react';
+import { 
+  Mic, 
+  Square, 
+  Volume2, 
+  RefreshCw, 
+  TrendingUp, 
+  Sparkles, 
+  Loader, 
+  Play, 
+  Pause,
+  Activity,
+  FileText,
+  CheckCircle2,
+  Bot,
+  BarChart3
+} from 'lucide-react';
 import axios from 'axios';
 
+// --- 1. Internal CSS & Animations (Standard VitalCare Theme) ---
+const customStyles = `
+  @keyframes float {
+    0%, 100% { transform: translateY(0px) rotate(0deg); }
+    50% { transform: translateY(-20px) rotate(5deg); }
+  }
+  .animate-float-slow { animation: float 6s ease-in-out infinite; }
+  .animate-float-medium { animation: float 5s ease-in-out infinite; }
+  
+  .reveal-section {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: all 0.8s cubic-bezier(0.5, 0, 0, 1);
+    will-change: opacity, transform;
+  }
+  .reveal-section.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .result-scroll::-webkit-scrollbar {
+    width: 6px;
+  }
+  .result-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .result-scroll::-webkit-scrollbar-thumb {
+    background-color: #cbd5e1;
+    border-radius: 20px;
+  }
+`;
+
+// --- 2. Helper Components ---
+
+const RevealOnScroll = ({ children, delay = 0 }) => {
+  const [isVisible, setIsVisible] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true);
+          observer.unobserve(entry.target);
+        }
+      },
+      { threshold: 0.1, rootMargin: "0px 0px -50px 0px" }
+    );
+    if (ref.current) observer.observe(ref.current);
+    return () => { if (ref.current) observer.disconnect(); };
+  }, []);
+
+  return (
+    <div ref={ref} className={`reveal-section ${isVisible ? "is-visible" : ""}`} style={{ transitionDelay: `${delay}ms` }}>
+      {children}
+    </div>
+  );
+};
+
+const BackgroundIcon = ({ icon: Icon, className }) => (
+  <div className={`absolute opacity-5 md:opacity-10 pointer-events-none select-none ${className}`} aria-hidden="true">
+    <Icon className="w-full h-full" />
+  </div>
+);
+
 const VoiceAssessment = () => {
+  // Default level to 'beginner' internally since UI selector is removed
   const [level, setLevel] = useState('beginner');
   const [prompt, setPrompt] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -15,6 +96,9 @@ const VoiceAssessment = () => {
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const audioRef = useRef(null);
+  
+  // Ref for scrolling to results
+  const resultsRef = useRef(null);
 
   useEffect(() => {
     generateNewPrompt();
@@ -36,11 +120,10 @@ const VoiceAssessment = () => {
         { headers: { 'Content-Type': 'multipart/form-data' } }
       );
 
-      console.log('✅ Prompt generated:', response.data);
       setPrompt(response.data.prompt);
     } catch (error) {
-      console.error('❌ Error generating prompt:', error);
-      alert('Failed to generate prompt. Check console.');
+      console.error('Error generating prompt:', error);
+      alert('Failed to generate prompt.');
     } finally {
       setLoadingPrompt(false);
     }
@@ -49,7 +132,6 @@ const VoiceAssessment = () => {
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
@@ -68,9 +150,7 @@ const VoiceAssessment = () => {
 
       mediaRecorder.start();
       setIsRecording(true);
-      console.log('🎙️ Recording started');
     } catch (error) {
-      console.error('Microphone error:', error);
       alert('Could not access microphone. Please grant permission.');
     }
   };
@@ -79,15 +159,12 @@ const VoiceAssessment = () => {
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
-      console.log('⏹️ Recording stopped');
     }
   };
 
   const analyzeRecording = async () => {
     if (!audioBlob || !prompt) return;
-
     setIsAnalyzing(true);
-    console.log('🔄 Analyzing speech...');
 
     try {
       const formData = new FormData();
@@ -104,11 +181,16 @@ const VoiceAssessment = () => {
           timeout: 30000
         }
       );
-
-      console.log('✅ Analysis complete:', response.data);
       setResult(response.data);
+      
+      // Scroll to results after a short delay to ensure rendering
+      setTimeout(() => {
+        if (resultsRef.current) {
+          resultsRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 300);
+
     } catch (error) {
-      console.error('❌ Analysis error:', error);
       alert('Analysis failed. Check console for details.');
     } finally {
       setIsAnalyzing(false);
@@ -117,237 +199,230 @@ const VoiceAssessment = () => {
 
   const playFeedbackAudio = () => {
     if (!result?.audio_feedback_url) return;
-
     const audioUrl = `http://localhost:8006${result.audio_feedback_url}`;
     
     if (audioRef.current) {
       audioRef.current.src = audioUrl;
       audioRef.current.play();
       setIsPlayingFeedback(true);
-      
       audioRef.current.onended = () => setIsPlayingFeedback(false);
     }
   };
 
   const getScoreColor = (score) => {
-    if (score >= 80) return 'text-green-600 bg-green-50';
-    if (score >= 60) return 'text-yellow-600 bg-yellow-50';
-    return 'text-red-600 bg-red-50';
-  };
-
-  const getScoreLabel = (score) => {
-    if (score >= 80) return 'Excellent';
-    if (score >= 60) return 'Good';
-    return 'Needs Practice';
+    if (score >= 80) return 'text-emerald-600 bg-emerald-50 border-emerald-100';
+    if (score >= 60) return 'text-amber-600 bg-amber-50 border-amber-100';
+    return 'text-rose-600 bg-rose-50 border-rose-100';
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-100 p-8">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="flex items-center justify-center mb-4">
-            <Mic className="w-12 h-12 text-purple-600 mr-3" />
-            <h1 className="text-4xl font-bold text-gray-800">Voice Assessment Agent</h1>
-          </div>
-          <p className="text-gray-600 text-lg">AI-powered speech analysis and pronunciation feedback</p>
-        </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-cyan-50/30 to-slate-100 overflow-x-hidden font-sans">
+      <style>{customStyles}</style>
 
-        {/* Level Selector */}
-        <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
-          <label className="block text-sm font-semibold text-gray-700 mb-3">Select Your Level:</label>
-          <div className="flex gap-4">
-            {['beginner', 'intermediate', 'advanced'].map((lvl) => (
-              <button
-                key={lvl}
-                onClick={() => {
-                  setLevel(lvl);
-                  generateNewPrompt();
-                }}
-                className={`flex-1 py-3 px-6 rounded-lg font-semibold transition ${
-                  level === lvl
-                    ? 'bg-purple-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {lvl.charAt(0).toUpperCase() + lvl.slice(1)}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="grid md:grid-cols-2 gap-6">
-          {/* Recording Section */}
-          <div className="bg-white rounded-xl shadow-lg p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-800">Read Aloud</h2>
-              <button
-                onClick={generateNewPrompt}
-                disabled={loadingPrompt || isRecording}
-                className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition disabled:opacity-50"
-              >
-                <RefreshCw className={`w-5 h-5 ${loadingPrompt ? 'animate-spin' : ''}`} />
-              </button>
+      <div className="max-w-[90rem] mx-auto px-6 py-8 lg:py-16">
+        
+        {/* ================= HEADER ================= */}
+        <section className="relative py-12 flex flex-col items-center text-center mb-12">
+          <BackgroundIcon icon={Mic} className="w-48 h-48 top-0 left-10 text-cyan-500 animate-float-slow" />
+          <BackgroundIcon icon={Activity} className="w-32 h-32 bottom-0 right-10 text-teal-400 animate-float-medium" />
+          
+          <RevealOnScroll>
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-cyan-50 text-cyan-700 rounded-full font-bold text-sm mb-6 border border-cyan-100">
+              <Volume2 className="w-4 h-4" />
+              Speech Therapy AI
             </div>
+            <h1 className="text-4xl md:text-6xl font-bold text-slate-900 mb-6 tracking-tight">
+              Voice Assessment Agent
+            </h1>
+            <p className="text-xl text-slate-600 max-w-2xl mx-auto leading-relaxed">
+              AI-powered speech analysis and pronunciation feedback using advanced audio processing models.
+            </p>
+          </RevealOnScroll>
+        </section>
 
-            {/* Prompt Display */}
-            <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg p-6 mb-6 min-h-[120px] flex items-center justify-center">
-              {loadingPrompt ? (
-                <div className="flex items-center gap-2 text-gray-500">
-                  <Sparkles className="w-5 h-5 animate-pulse" />
-                  <span>Generating prompt...</span>
-                </div>
-              ) : prompt ? (
-                <p className="text-2xl text-gray-800 font-medium text-center leading-relaxed">
-                  "{prompt.text}"
-                </p>
-              ) : (
-                <p className="text-gray-400">Click refresh to generate a prompt</p>
-              )}
-            </div>
-
-            {/* Recording Controls */}
-            <div className="space-y-4">
-              {!isRecording && !audioBlob && (
-                <button
-                  onClick={startRecording}
-                  disabled={!prompt || loadingPrompt}
-                  className="w-full py-4 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition flex items-center justify-center gap-2"
-                >
-                  <Mic className="w-5 h-5" />
-                  Start Recording
-                </button>
-              )}
-
-              {isRecording && (
-                <button
-                  onClick={stopRecording}
-                  className="w-full py-4 bg-gray-800 text-white rounded-lg font-semibold hover:bg-gray-900 transition flex items-center justify-center gap-2 animate-pulse"
-                >
-                  <Square className="w-5 h-5" />
-                  Stop Recording
-                </button>
-              )}
-
-              {audioBlob && !isRecording && (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-green-600 bg-green-50 p-3 rounded-lg">
-                    <Volume2 className="w-5 h-5" />
-                    <span className="font-medium">Recording captured!</span>
-                  </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-start">
+          
+          {/* ================= LEFT: INTERACTION ================= */}
+          <RevealOnScroll delay={100}>
+            <div className="bg-white border border-gray-200 rounded-[2rem] p-8 lg:p-12 shadow-xl relative overflow-hidden h-full">
+              
+              {/* Prompt Card */}
+              <div className="relative group mb-8">
+                <div className="absolute -inset-1 bg-gradient-to-r from-cyan-200 to-blue-200 rounded-2xl opacity-20 group-hover:opacity-40 transition duration-500"></div>
+                <div className="relative bg-slate-50 border border-slate-200 rounded-2xl p-8 flex flex-col items-center text-center min-h-[160px] justify-center">
+                  {loadingPrompt ? (
+                    <div className="flex flex-col items-center gap-3 text-slate-400">
+                      <Loader className="w-8 h-8 animate-spin text-cyan-500" />
+                      <span className="text-sm font-medium">Generating Prompt...</span>
+                    </div>
+                  ) : prompt ? (
+                    <>
+                      <Sparkles className="w-6 h-6 text-cyan-400 mb-3" />
+                      <p className="text-xl md:text-2xl font-medium text-slate-800 leading-relaxed">"{prompt.text}"</p>
+                    </>
+                  ) : (
+                    <p className="text-slate-400">Tap refresh to generate a prompt</p>
+                  )}
                   
-                  <button
-                    onClick={analyzeRecording}
-                    disabled={isAnalyzing}
-                    className="w-full py-4 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 disabled:bg-gray-300 transition flex items-center justify-center gap-2"
+                  <button 
+                    onClick={generateNewPrompt}
+                    disabled={loadingPrompt || isRecording}
+                    className="absolute top-4 right-4 p-2 text-slate-400 hover:text-cyan-600 hover:bg-white rounded-full transition-all"
                   >
-                    {isAnalyzing ? (
-                      <>
-                        <Loader className="w-5 h-5 animate-spin" />
-                        Analyzing...
-                      </>
-                    ) : (
-                      <>
-                        <TrendingUp className="w-5 h-5" />
-                        Analyze Speech
-                      </>
-                    )}
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setAudioBlob(null);
-                      setResult(null);
-                    }}
-                    className="w-full py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition"
-                  >
-                    Record Again
+                    <RefreshCw className={`w-5 h-5 ${loadingPrompt ? 'animate-spin' : ''}`} />
                   </button>
                 </div>
-              )}
-            </div>
-          </div>
-
-          {/* Results Section */}
-          <div className="bg-white rounded-xl shadow-lg p-6">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">Analysis Results</h2>
-
-            {!result ? (
-              <div className="text-center py-12 text-gray-400">
-                <TrendingUp className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                <p>Record and analyze your speech to see results</p>
               </div>
-            ) : (
+
+              {/* Controls */}
               <div className="space-y-4">
-                {/* Overall Score */}
-                <div className={`p-4 rounded-lg ${getScoreColor(result.analysis.overall_score)}`}>
-                  <div className="flex justify-between items-center">
-                    <span className="font-semibold">Overall Score:</span>
-                    <span className="text-3xl font-bold">{result.analysis.overall_score}/100</span>
-                  </div>
-                  <p className="text-sm mt-1">{getScoreLabel(result.analysis.overall_score)}</p>
-                </div>
-
-                {/* Individual Scores */}
-                <div className="grid grid-cols-2 gap-3">
-                  {Object.entries(result.analysis.scores).map(([key, value]) => {
-                    if (key === 'overall') return null;
-                    return (
-                      <div key={key} className="bg-gray-50 p-3 rounded-lg">
-                        <p className="text-xs text-gray-600 capitalize">{key}</p>
-                        <p className="text-xl font-bold text-gray-800">{value}/100</p>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Transcription */}
-                <div className="border-t pt-4">
-                  <h3 className="font-semibold mb-2 text-sm text-gray-700">You said:</h3>
-                  <p className="text-gray-800 italic">"{result.analysis.transcription}"</p>
-                </div>
-
-                {/* AI Feedback */}
-                <div className="border-t pt-4">
-                  <h3 className="font-semibold mb-2 text-sm text-gray-700">AI Feedback:</h3>
-                  <p className="text-gray-700 leading-relaxed">{result.feedback.text}</p>
-                  
+                {!isRecording && !audioBlob && (
                   <button
-                    onClick={playFeedbackAudio}
-                    disabled={isPlayingFeedback}
-                    className="mt-3 w-full py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 disabled:bg-gray-300 transition flex items-center justify-center gap-2"
+                    onClick={startRecording}
+                    disabled={!prompt || loadingPrompt}
+                    className="w-full py-5 bg-cyan-600 text-white rounded-2xl font-bold hover:bg-cyan-700 transition-all shadow-lg hover:shadow-cyan-200 hover:-translate-y-1 flex items-center justify-center gap-3 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {isPlayingFeedback ? (
-                      <>
-                        <Pause className="w-4 h-4" />
-                        Playing...
-                      </>
-                    ) : (
-                      <>
-                        <Play className="w-4 h-4" />
-                        Listen to Feedback
-                      </>
-                    )}
+                    <Mic className="w-6 h-6" /> Start Recording
                   </button>
-                </div>
+                )}
 
-                {/* Suggestions */}
-                {result.feedback.suggestions && result.feedback.suggestions.length > 0 && (
-                  <div className="border-t pt-4">
-                    <h3 className="font-semibold mb-2 text-sm text-gray-700">Tips for Improvement:</h3>
-                    <ul className="space-y-1">
-                      {result.feedback.suggestions.map((tip, i) => (
-                        <li key={i} className="text-sm text-gray-700">• {tip}</li>
-                      ))}
-                    </ul>
+                {isRecording && (
+                  <button
+                    onClick={stopRecording}
+                    className="w-full py-5 bg-slate-900 text-white rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-lg flex items-center justify-center gap-3 text-lg animate-pulse"
+                  >
+                    <Square className="w-5 h-5" /> Stop Recording...
+                  </button>
+                )}
+
+                {audioBlob && !isRecording && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-center gap-2 text-emerald-600 bg-emerald-50 p-3 rounded-xl border border-emerald-100">
+                      <CheckCircle2 className="w-5 h-5" />
+                      <span className="font-bold text-sm">Audio Captured Successfully</span>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        onClick={() => { setAudioBlob(null); setResult(null); }}
+                        className="py-4 bg-white text-slate-600 border-2 border-slate-200 rounded-xl font-bold hover:border-slate-300 hover:bg-slate-50 transition-all"
+                      >
+                        Try Again
+                      </button>
+                      <button
+                        onClick={analyzeRecording}
+                        disabled={isAnalyzing}
+                        className="py-4 bg-cyan-600 text-white rounded-xl font-bold hover:bg-cyan-700 transition-all shadow-md flex items-center justify-center gap-2 disabled:opacity-70"
+                      >
+                        {isAnalyzing ? <Loader className="w-5 h-5 animate-spin" /> : <TrendingUp className="w-5 h-5" />}
+                        Analyze
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
-            )}
-          </div>
+            </div>
+          </RevealOnScroll>
+
+          {/* ================= RIGHT: RESULTS ================= */}
+          <RevealOnScroll delay={200}>
+            <div 
+              ref={resultsRef} 
+              className={`bg-white border border-gray-200 rounded-[2rem] p-8 lg:p-12 shadow-xl h-full flex flex-col transition-all duration-500 ${!result ? "justify-center items-center text-center min-h-[600px]" : ""}`}
+            >
+              
+              {result ? (
+                <div className="w-full h-full flex flex-col">
+                  {/* Result Header */}
+                  <div className="flex items-center justify-between mb-6 pb-6 border-b border-slate-100">
+                    <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
+                      <Activity className="w-6 h-6 text-cyan-600" /> Analysis Report
+                    </h2>
+                    <span className={`px-4 py-1.5 rounded-full text-sm font-bold uppercase tracking-wider border ${getScoreColor(result.analysis.overall_score)}`}>
+                       {result.analysis.overall_score >= 80 ? 'Excellent' : result.analysis.overall_score >= 60 ? 'Good' : 'Practice Needed'}
+                    </span>
+                  </div>
+
+                  {/* Score Card */}
+                  <div className="mb-6 relative overflow-hidden rounded-2xl bg-slate-900 text-white p-8 shadow-lg">
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-cyan-500 to-blue-600 opacity-20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+                    <div className="relative z-10 flex items-end justify-between">
+                      <div>
+                        <p className="text-slate-400 font-medium mb-1">Overall Proficiency</p>
+                        <h3 className="text-5xl font-extrabold tracking-tight">{result.analysis.overall_score}<span className="text-2xl text-slate-500">/100</span></h3>
+                      </div>
+                      <div className="w-16 h-16 rounded-full bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center shadow-inner">
+                        <Activity className="w-8 h-8 text-white" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Scrollable Content */}
+                  <div className="flex-1 overflow-y-auto result-scroll pr-2 space-y-6 max-h-[400px]">
+                    
+                    {/* Detailed Scores */}
+                    <div className="grid grid-cols-2 gap-3">
+                      {Object.entries(result.analysis.scores).map(([key, value]) => {
+                        if (key === 'overall') return null;
+                        return (
+                          <div key={key} className="bg-slate-50 border border-slate-100 p-4 rounded-xl">
+                            <p className="text-xs font-bold text-slate-500 uppercase mb-1">{key}</p>
+                            <p className="text-xl font-bold text-slate-800">{value}%</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Feedback */}
+                    <div className="bg-cyan-50/50 border border-cyan-100 rounded-xl p-5">
+                      <h3 className="font-bold text-slate-900 mb-2 flex items-center gap-2">
+                        <Bot className="w-4 h-4 text-cyan-600" /> AI Feedback
+                      </h3>
+                      <p className="text-slate-700 text-sm leading-relaxed italic">"{result.feedback.text}"</p>
+                      
+                      <button
+                        onClick={playFeedbackAudio}
+                        disabled={isPlayingFeedback}
+                        className="mt-4 w-full py-3 bg-white border border-cyan-200 text-cyan-700 rounded-xl font-bold hover:bg-cyan-50 transition flex items-center justify-center gap-2 text-sm"
+                      >
+                        {isPlayingFeedback ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                        {isPlayingFeedback ? "Playing Feedback..." : "Listen to Coach"}
+                      </button>
+                    </div>
+
+                    {/* Suggestions */}
+                    {result.feedback.suggestions?.length > 0 && (
+                      <div>
+                         <h3 className="font-bold text-slate-900 mb-3">Improvement Tips</h3>
+                         <ul className="space-y-2">
+                           {result.feedback.suggestions.map((tip, i) => (
+                             <li key={i} className="flex items-start gap-3 p-3 bg-slate-50 rounded-xl text-sm text-slate-700 border border-slate-100">
+                               <div className="w-1.5 h-1.5 rounded-full bg-cyan-500 mt-1.5 shrink-0"></div> {tip}
+                             </li>
+                           ))}
+                         </ul>
+                      </div>
+                    )}
+                  </div>
+
+                </div>
+              ) : (
+                 // Empty State
+                <>
+                  <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mb-6">
+                    <FileText className="w-12 h-12 text-slate-300" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-slate-900 mb-2">Ready to Analyze</h3>
+                  <p className="text-slate-500 max-w-xs mx-auto">
+                    Record your voice on the left to generate a detailed speech analysis report.
+                  </p>
+                </>
+              )}
+            </div>
+          </RevealOnScroll>
         </div>
 
-        {/* Hidden audio element for feedback playback */}
+        {/* Hidden Audio */}
         <audio ref={audioRef} style={{ display: 'none' }} />
       </div>
     </div>
