@@ -15,10 +15,11 @@ const Navbar = () => {
   }, []);
 
   const navItems = [
-     { name: "Home", path: "/" },
+    { name: "Home", path: "/" },
     { name: "Services", path: "/#services" },
     { name: "Features", path: "/#features" },
-   
+    { name: "Pricing", path: "/model" },
+    { name: "Chain", path: "/chain" },
   ];
 
   return (

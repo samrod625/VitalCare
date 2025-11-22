@@ -9,6 +9,7 @@ import DyselexiaAgent from "./pages/DyslexiaAgent";
 import VoiceAssessment from "./pages/VoiceAssessment";
 import Auth from "./pages/Auth";
 import BussinessModel from "./pages/BussinessModel";
+import BlockchainViewer from "./pages/BlockchainViewer";
 
 function App() {
   return (
@@ -25,6 +26,7 @@ function App() {
             <Route path="/dyslexia" element={<DyselexiaAgent />} />
             <Route path="/speech" element={<VoiceAssessment />} />
             <Route path="/model" element={<BussinessModel />} />
+            <Route path="/chain" element={<BlockchainViewer />} />
           </Routes>
         </main>
         <Footer />
